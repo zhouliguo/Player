@@ -46,6 +46,10 @@ INT_PTR CALLBACK YUVDialogProcedure(HWND, UINT, WPARAM, LPARAM);
 
 INT_PTR CALLBACK AboutDialogProcedure(HWND, UINT, WPARAM, LPARAM);
 
+int GetFileName(char *fileName, char *fullPath);
+
+int GetFormat(char *format, char *fileName);
+
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine, int iCmdShow) {
 	av_register_all();
 
@@ -89,6 +93,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 
 	static TCHAR fullPath[MAX_PATH];
 	static TCHAR fileName[MAX_PATH];
+	static TCHAR format[3];
 
 	static int start = 0;	//0表示没有文件被打开，1表示有文件被打开
 	static int play = 0;	//0表示处于暂停状态，1表示处于播放状态
@@ -126,6 +131,18 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 		sdlSurface = SDL_LoadBMP("player.bmp");
 		sdlStartTexture = SDL_CreateTextureFromSurface(sdlRenderer, sdlSurface);
 		SDL_FreeSurface(sdlSurface);
+
+		if (__argc == 2) {
+			strcpy(fullPath, __argv[1]);
+			GetFileName(fileName, fullPath);
+			GetFormat(format, fileName);
+			if (strcmp(format, "yuv")==0 || strcmp(format, "YUV")==0) {
+				PostMessage(hwnd, WM_COMMAND, IDM_FILE_OPENYUV, NULL);
+			}
+			else {
+				PostMessage(hwnd, WM_COMMAND, IDM_FILE_OPEN, NULL);
+			}
+		}
 		break;
 	case WM_SIZE:
 		if (start == 1) {
@@ -144,6 +161,12 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 		switch (wParam) {
 		case IDM_FILE_OPEN:
 			if (start == 0) {
+				if (__argc == 2) {
+					__argc = 1;
+				}
+				else if(!OpenDialog(hwnd, fullPath, fileName)) {
+					return -1;
+				}
 				if (!OpenFile(hwnd, fullPath, fileName, &decodeParam, &sdlShowRect)) {
 					return -1;
 				}
@@ -159,6 +182,9 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 				}
 				CloseFile(&decodeParam);
 				SDL_DestroyTexture(sdlTexture);
+				if (!OpenDialog(hwnd, fullPath, fileName)) {
+					return -1;
+				}
 				if (!OpenFile(hwnd, fullPath, fileName, &decodeParam, &sdlShowRect)) {
 					return -1;
 				}
@@ -168,7 +194,10 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 			}
 			break;
 		case IDM_FILE_OPENYUV:
-			if (!OpenDialog(hwnd, fullPath, fileName)) {
+			if (__argc == 2) {
+				__argc = 1;
+			}
+			else if (!OpenDialog(hwnd, fullPath, fileName)) {
 				return -1;
 			}
 			DialogBoxParam(hInstance, MAKEINTRESOURCE(IDD_PROPPAGE_MEDIUM), hwnd, YUVDialogProcedure, (LPARAM)&yuvParam);
@@ -322,7 +351,7 @@ LRESULT CALLBACK WindowProcedure(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 
 int OpenDialog(HWND hwnd, TCHAR* fullPath, TCHAR* fileName) {
 	static OPENFILENAME openFileName;
-	static TCHAR fileFormat[] = TEXT("视频文件(*.mp4;*.avi;*.rmvb;*mkv;*yuv)\0*.mp4;*.rmvb;*.avi;*.mkv;*.yuv\0所有文件(*.*)\0*.*\0\0");
+	static TCHAR fileFormat[] = TEXT("视频文件(*.mp4;*.avi;*.rmvb;*mkv;*yuv;*wmv)\0*.mp4;*.rmvb;*.avi;*.mkv;*.yuv;*.wmv\0所有文件(*.*)\0*.*\0\0");
 	openFileName.lStructSize = sizeof(OPENFILENAME);
 	openFileName.hwndOwner = hwnd;
 	openFileName.hInstance = 0;
@@ -389,10 +418,7 @@ int OpenFile(HWND hwnd, TCHAR* fullPath, TCHAR* fileName, DecodeParam *decodePar
 	int width;
 	int height;
 	SDL_Rect rect;
-	if (!OpenDialog(hwnd, fullPath, fileName)) {
-		MessageBox(0, TEXT("无法打开文件！"), 0, MB_ICONERROR);
-		return 0;
-	}
+
 	SetWindowText(hwnd, fileName);
 
 	decodeParam->formatContext = avformat_alloc_context();
@@ -502,4 +528,21 @@ INT_PTR CALLBACK AboutDialogProcedure(HWND hDlg, UINT message, WPARAM wParam, LP
 		break;
 	}
 	return FALSE;
+}
+
+int GetFileName(char *fileName,char *fullPath) {
+	char *c = fullPath;
+	while (c = strstr(c, "\\")) {
+		c++;
+		strcpy(fileName, c);
+	}
+	return 1;
+}
+
+int GetFormat(char *format, char *fileName) {
+	int i = strlen(fileName);
+	format[0] = fileName[i - 3];
+	format[1] = fileName[i - 2];
+	format[2] = fileName[i - 1];
+	return 1;
 }
